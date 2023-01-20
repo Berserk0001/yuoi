@@ -3,7 +3,7 @@ const fetch = require("node-fetch");
 const shouldCompress = require("../util/shouldCompress");
 const compress = require("../util/compress");
 
-const DEFAULT_QUALITY = 40;
+const DEFAULT_QUALITY = 10;
 
 exports.handler = async (event, context) => {
     let { url } = event.queryStringParameters;
@@ -33,7 +33,7 @@ exports.handler = async (event, context) => {
 
     try {
         let response_headers = {};
-        const { data, type: originType } = await fetch(url, {
+        let { data, type: originType } = await fetch(url, {  // use const by default
             headers: {
                 ...pick(event.headers, ['cookie', 'dnt', 'referer']),
                 'user-agent': 'Bandwidth-Hero Compressor',
@@ -54,7 +54,7 @@ exports.handler = async (event, context) => {
             }
         })
 
-        const originSize = data.length;
+        let originSize = data.length;  // use const by default
 
         if (shouldCompress(originType, originSize, webp)) {
             const { err, output, headers } = await compress(data, webp, grayscale, quality, originSize);   // compress
@@ -64,7 +64,8 @@ exports.handler = async (event, context) => {
                 throw err;
             }
 
-            console.log(`From ${originSize}, Saved: ${(originSize - output.length)/originSize}%`);
+            // console.log(`From ${originSize}, Saved: ${(originSize - output.length)/originSize}%`);
+            console.log(`From: ${originSize}, To: ${output.length}, Saved: ${(originSize - output.length)}`);  // better readability
             const encoded_output = output.toString('base64');
             return {
                 statusCode: 200,
