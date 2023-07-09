@@ -7,7 +7,7 @@ const DEFAULT_QUALITY = 10;
 
 exports.handler = async (event, context) => {
     let { url } = event.queryStringParameters;
-    let { jpeg, bw, l } = event.queryStringParameters;  // use const by default
+    let { jpg, bw, l } = event.queryStringParameters;  // use const by default
 
     if (!url) {
         return {
@@ -27,7 +27,7 @@ exports.handler = async (event, context) => {
     // by now, url is a string
     url = url.replace(/http:\/\/1\.1\.\d\.\d\/bmi\/(https?:\/\/)?/i, "http://");
 
-    let webp = !jpeg;  // use const by default
+    let webp = !jpg;  // use const by default
     let grayscale = bw != 0;  // use const by default
     let quality = parseInt(l, 10) || DEFAULT_QUALITY;  // use const by default
 
