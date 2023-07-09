@@ -1,9 +1,20 @@
 const sharp = require("sharp");
 
 function compress(input, webp, grayscale, quality, originSize) {
-	const format = webp ? "webp" : "jpg";
-	let compressionQuality = quality * 0.5;
-            
+	let format = webp ? "webp" : "jpeg";
+	let imgWidth = metadata.width;
+	let imgHeight = metadata.height;
+	let compressionQuality = quality;
+
+	//lazy way to redirect webp to jpeg if webp images reached res limit
+	if(imgWidth >= 16383 || imgHeight >= 16383){
+		format = 'jpeg';
+		compressionQuality *= 2.75;
+	}else{
+		format = 'webp';
+		compressionQuality *= 0.5;
+	}
+	
         quality = Math.ceil(compressionQuality)
 	
 	return sharp(input)
