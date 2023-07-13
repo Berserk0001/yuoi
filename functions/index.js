@@ -2,6 +2,7 @@ const pick = require("../util/pick");
 const fetch = require("node-fetch");
 const shouldCompress = require("../util/shouldCompress");
 const compress = require("../util/compress");
+const sharp = require("sharp");
 
 const DEFAULT_QUALITY = 10;
 
@@ -55,9 +56,10 @@ exports.handler = async (event, context) => {
         })
 
         let originSize = data.length;  // use const by default
+        const metadata = await sharp(data).metadata();    // fetching original img metadata
 
         if (shouldCompress(originType, originSize, webp)) {
-            let { err, output, headers } = await compress(data, webp, grayscale, quality, originSize);   // compress, use const by default
+            let { err, output, headers } = await compress(data, webp, grayscale, quality, originSize, metadata);   // compress, use const by default
 
             if (err) {
                 console.log("Conversion failed: ", url);
