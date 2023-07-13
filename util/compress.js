@@ -9,7 +9,7 @@ function compress(input, webp, grayscale, quality, originSize, metadata) {
 	//workaround for webp max res limit
 	if (imgWidth >= 16383 || imgHeight >= 16383) {
 		format = 'jpeg';
-		compressionQuality *= 2.0;
+		compressionQuality *= 2.5;
 	} else {
 		format = 'webp';
 		compressionQuality *= 0.5;
