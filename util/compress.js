@@ -10,11 +10,11 @@ function compress(input, webp, grayscale, quality, originSize, metadata) {
 	let resizeHeight = null
 
 	//workaround for webp max res limit by resizing
-	if (imgHeight >= 8383) {	//longstrip webtoon/manhwa/manhua
+	if (imgHeight >= 9393) {	//longstrip webtoon/manhwa/manhua
 		format = 'webp'
 		compressionQuality *= 0.5
 		effortCPU = 6
-		resizeHeight = 8383
+		resizeHeight = 9393
 	} else {
 		format = 'webp'
 		compressionQuality *= 0.5
