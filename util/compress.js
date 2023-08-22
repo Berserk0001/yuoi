@@ -5,16 +5,16 @@ function compress(input, webp, grayscale, quality, originSize, metadata) {
 	let imgWidth = metadata.width
 	let imgHeight = metadata.height
 	let compressionQuality = quality
-	let effortCPU = 2
+	let effortCPU = 6
 	let resizeWidth = null
 	let resizeHeight = null
 
 	//workaround for webp max res limit by resizing
-	if (imgHeight >= 16383) {	//longstrip webtoon/manhwa/manhua
-		format = 'webp'
-		compressionQuality *= 0.5
-		effortCPU = 4
-		resizeHeight = 15383
+	if (imgHeight >= 9383) {	//longstrip webtoon/manhwa/manhua
+		format = 'avif'
+		compressionQuality *= 3.0
+		effortCPU = 2
+		resizeHeight = 9383
 	} else {
 		format = 'webp'
 		compressionQuality *= 0.5
@@ -46,7 +46,7 @@ function compress(input, webp, grayscale, quality, originSize, metadata) {
 		})
 		.grayscale(grayscale)
 		.toFormat(format, {
-			quality: quality,
+			quality: compressionQuality,
 			preset: 'picture',
 			effort: effortCPU
 		})
