@@ -7,15 +7,12 @@ const sharp = require("sharp");
 
 const DEFAULT_QUALITY = 10;
 
-exports.handler = async (event, context) => {
-    let { url } = event.queryStringParameters;
-    let { jpeg, bw, l } = event.queryStringParameters;
+async function proxy(req, res) {
+    let { url, jpeg, bw, l } = req.query;
 
     if (!url) {
-        return {
-            statusCode: 200,
-            body: "bandwidth-hero-proxy"
-        };
+        res.status(200).send("bandwidth-hero-proxy");
+        return;
     }
 
     try {
@@ -28,70 +25,56 @@ exports.handler = async (event, context) => {
 
     url = url.replace(/http:\/\/1\.1\.\d\.\d\/bmi\/(https?:\/\/)?/i, "http://");
 
-    let webp = !jpeg;  
-    let grayscale = bw != 0;  
-    let quality = parseInt(l, 10) || DEFAULT_QUALITY;  
+    const webp = !jpeg;  
+    const grayscale = bw != 0;  
+    const quality = parseInt(l, 10) || DEFAULT_QUALITY;  
 
     try {
-        let response_headers = {};
         const { body, headers } = await request(url, {
             headers: {
-                ...pick(event.headers, ['cookie', 'dnt', 'referer']),
+                ...pick(req.headers, ['cookie', 'dnt', 'referer']),
                 'user-agent': 'Bandwidth-Hero Compressor',
-                'x-forwarded-for': event.headers['x-forwarded-for'] || event.ip,
+                'x-forwarded-for': req.headers['x-forwarded-for'] || req.ip,
                 via: '1.1 bandwidth-hero'
             }
         });
 
         if (!body) {
-            return {
-                statusCode: 500,
-                body: 'Failed to retrieve image.'
-            };
+            res.status(500).send('Failed to retrieve image.');
+            return;
         }
 
-        response_headers = headers;
         const metadata = await sharp(body).metadata();    
-
         const originSize = parseInt(headers['content-length'], 10) || 0;
 
         if (shouldCompress(headers['content-type'], originSize, webp)) {
-            let { err, output, headers } = await compress(body, webp, grayscale, quality, originSize, metadata);
+            let { err, output, headers: compressionHeaders } = await compress(body, webp, grayscale, quality, originSize, metadata);
 
             if (err) {
                 console.log("Conversion failed: ", url);
-                throw err;
+                res.status(500).send("Conversion failed");
+                return;
             }
 
             console.log(`From: ${originSize}, To: ${output.length}, Saved: ${(originSize - output.length)}`);
-            const encoded_output = output.toString('base64');
-            return {
-                statusCode: 200,
-                body: encoded_output,
-                isBase64Encoded: true,
-                headers: {
-                    "content-encoding": "identity",
-                    ...response_headers,
-                    ...headers
-                }
-            };
+            res.writeHead(200, {
+                "content-encoding": "identity",
+                ...headers,
+                ...compressionHeaders
+            });
+            res.end(output);
         } else {
             console.log("Bypassing... Size: ", originSize);
-            return {
-                statusCode: 200,
-                body: body.toString('base64'),
-                isBase64Encoded: true,
-                headers: {
-                    "content-encoding": "identity",
-                    ...response_headers,
-                }
-            };
+            res.writeHead(200, {
+                "content-encoding": "identity",
+                ...headers,
+            });
+            body.pipe(res);  // Stream the original image directly to the response if bypassing compression
         }
     } catch (err) {
         console.error(err);
-        return {
-            statusCode: 500,
-            body: err.message || ""
-        };
+        res.status(500).send(err.message || "An error occurred");
     }
-};
+}
+
+module.exports = proxy;
