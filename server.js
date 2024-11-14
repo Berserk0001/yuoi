@@ -3,7 +3,7 @@
 const express = require('express');
 const app = express();
 
-const proxy = require('./index.js'); // Import the proxy handler from index.js
+const proxy = require('./functions/index.js'); // Import the proxy handler from index.js
 
 app.enable('trust proxy');  // Enable trust proxy if behind a proxy
 
