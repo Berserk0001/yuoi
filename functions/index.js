@@ -1,14 +1,11 @@
+const { request } = require('undici');
 const pick = require("../util/pick");
-const fetch = require("node-fetch");
 const shouldCompress = require("../util/shouldCompress");
 const compress = require("../util/compress");
-const sharp = require("sharp");
-
-const DEFAULT_QUALITY = 10;
 
 exports.handler = async (event, context) => {
     let { url } = event.queryStringParameters;
-    let { jpeg, bw, l } = event.queryStringParameters;  // use const by default
+    let { jpeg, bw, l } = event.queryStringParameters;
 
     if (!url) {
         return {
@@ -18,86 +15,68 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        url = JSON.parse(url);  // if simple string, then will remain so 
+        url = JSON.parse(url);
     } catch { }
 
     if (Array.isArray(url)) {
         url = url.join("&url=");
     }
 
-    // by now, url is a string
     url = url.replace(/http:\/\/1\.1\.\d\.\d\/bmi\/(https?:\/\/)?/i, "http://");
 
-    let webp = !jpeg;  // use const by default
-    let grayscale = bw != 0;  // use const by default
-    let quality = parseInt(l, 10) || DEFAULT_QUALITY;  // use const by default
+    let webp = !jpeg;
+    let grayscale = bw != 0;
+    let quality = parseInt(l, 10) || 10;
 
     try {
-        let response_headers = {};
-        let { data, type: originType } = await fetch(url, {  // use const by default
+        const { body, headers } = await request(url, {
             headers: {
                 ...pick(event.headers, ['cookie', 'dnt', 'referer']),
                 'user-agent': 'Bandwidth-Hero Compressor',
                 'x-forwarded-for': event.headers['x-forwarded-for'] || event.ip,
                 via: '1.1 bandwidth-hero'
             }
-        }).then(async res => {
-            if (!res.ok) {
-                return {
-                    statusCode: res.status || 302
-                }
-            }
+        });
 
-            response_headers = res.headers;
+        if (!body) {
             return {
-                data: await res.buffer(),
-                type: res.headers.get("content-type") || ""
-            }
-        })
+                statusCode: 500,
+                body: 'Failed to retrieve image.'
+            };
+        }
 
-        let originSize = data.length;  // use const by default
-        const metadata = await sharp(data).metadata();    // fetching original img metadata
+        const metadata = await sharp(body).metadata();
+        const originSize = parseInt(headers['content-length'], 10) || 0;
 
-        if (shouldCompress(originType, originSize, webp)) {
-            let { err, output, headers } = await compress(data, webp, grayscale, quality, originSize, metadata);   // compress, use const by default
+        if (shouldCompress(headers['content-type'], originSize, webp)) {
+            // Here, we pass the `body` stream to the compress function
+            // and pipe the compressed image directly to the response (`res`)
+            await new Promise((resolve, reject) => {
+                compress(body, webp, grayscale, quality, originSize, metadata, {
+                    setHeader: (name, value) => event.headers[name] = value, // Set headers on event if needed
+                    write: (data) => { /* Send the data to the response stream */ },
+                    end: () => resolve()  // End the response once the image has been fully piped
+                });
+            });
 
-            if (err) {
-                console.log("Conversion failed: ", url);
-                throw err;
-            }
-
-            // console.log(`From ${originSize}, Saved: ${(originSize - output.length)/originSize}%`);
-            console.log(`From: ${originSize}, To: ${output.length}, Saved: ${(originSize - output.length)}`);  // better readability
-            const encoded_output = output.toString('base64');
-            return {
-                statusCode: 200,
-                body: encoded_output,
-                isBase64Encoded: true,  // note: The final size we receive is `originSize` only, maybe it is decoding it server side, because at client side i do get the decoded image directly
-                // "content-length": encoded_output.length,     // this doesn't have any effect, this header contains the actual data size, (decrypted binary data size, not the base64 version)
-                headers: {
-                    "content-encoding": "identity",
-                    ...response_headers,
-                    ...headers
-                }
-            }
+            return { statusCode: 200 };  // Send the compressed image directly in the stream
         } else {
-            console.log("Bypassing... Size: " , data.length);
-            return {    // bypass
+            console.log("Bypassing... Size: ", originSize);
+            return {
                 statusCode: 200,
-                body: data.toString('base64'),
+                body: body.toString('base64'),
                 isBase64Encoded: true,
                 headers: {
                     "content-encoding": "identity",
-                    // "x-proxy-bypass": '1',
-                    ...response_headers,
+                    ...headers,
                 }
-            }
+            };
         }
     } catch (err) {
         console.error(err);
         return {
             statusCode: 500,
             body: err.message || ""
-        }
+        };
     }
-}
+};
