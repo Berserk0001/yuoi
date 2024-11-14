@@ -1,5 +1,5 @@
 
-const { request } = require('undici');
+const undici = require('undici');
 const pick = require("./pick.js");
 const shouldCompress = require("./shouldCompress.js");
 const compress = require("./compress.js");
@@ -30,7 +30,7 @@ async function proxy(req, res) {
     const quality = parseInt(l, 10) || DEFAULT_QUALITY;  
 
     try {
-        const { body, headers } = await request(url, {
+        const { body, headers } = await undici.request(url, {
             headers: {
                 ...pick(req.headers, ['cookie', 'dnt', 'referer']),
                 'user-agent': 'Bandwidth-Hero Compressor',
