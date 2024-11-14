@@ -1,20 +1,24 @@
+const { request } = require('undici');
 const pick = require("../util/pick");
-const fetch = require("node-fetch");
 const shouldCompress = require("../util/shouldCompress");
 const compress = require("../util/compress");
+const sharp = require("sharp");
 
 const DEFAULT_QUALITY = 10;
 
-const proxyHandler = async (req, res) => {
-    let { url } = req.query;
-    let { jpeg, bw, l } = req.query;
+exports.handler = async (event, context) => {
+    let { url } = event.queryStringParameters;
+    let { jpeg, bw, l } = event.queryStringParameters;
 
     if (!url) {
-        return res.status(200).send("bandwidth-hero-proxy");
+        return {
+            statusCode: 200,
+            body: "bandwidth-hero-proxy"
+        };
     }
 
     try {
-        url = JSON.parse(url);
+        url = JSON.parse(url);  
     } catch { }
 
     if (Array.isArray(url)) {
@@ -23,43 +27,70 @@ const proxyHandler = async (req, res) => {
 
     url = url.replace(/http:\/\/1\.1\.\d\.\d\/bmi\/(https?:\/\/)?/i, "http://");
 
-    let webp = !jpeg;
-    let grayscale = bw != 0;
-    let quality = parseInt(l, 10) || DEFAULT_QUALITY;
+    let webp = !jpeg;  
+    let grayscale = bw != 0;  
+    let quality = parseInt(l, 10) || DEFAULT_QUALITY;  
 
     try {
-        const { body, headers } = await fetch(url, {
+        let response_headers = {};
+        const { body, headers } = await request(url, {
             headers: {
-                ...pick(req.headers, ['cookie', 'dnt', 'referer']),
+                ...pick(event.headers, ['cookie', 'dnt', 'referer']),
                 'user-agent': 'Bandwidth-Hero Compressor',
-                'x-forwarded-for': req.headers['x-forwarded-for'] || req.ip,
+                'x-forwarded-for': event.headers['x-forwarded-for'] || event.ip,
                 via: '1.1 bandwidth-hero'
             }
         });
 
         if (!body) {
-            return res.status(500).send('Failed to retrieve image.');
+            return {
+                statusCode: 500,
+                body: 'Failed to retrieve image.'
+            };
         }
 
-        const metadata = await sharp(body).metadata();
+        response_headers = headers;
+        const metadata = await sharp(body).metadata();    
+
         const originSize = parseInt(headers['content-length'], 10) || 0;
 
         if (shouldCompress(headers['content-type'], originSize, webp)) {
-            // Stream the compressed image directly to the response
-            await new Promise((resolve, reject) => {
-                compress(body, webp, grayscale, quality, originSize, metadata, res);
-                res.on('finish', resolve);
-                res.on('error', reject);
-            });
+            let { err, output, headers } = await compress(body, webp, grayscale, quality, originSize, metadata);
+
+            if (err) {
+                console.log("Conversion failed: ", url);
+                throw err;
+            }
+
+            console.log(`From: ${originSize}, To: ${output.length}, Saved: ${(originSize - output.length)}`);
+            const encoded_output = output.toString('base64');
+            return {
+                statusCode: 200,
+                body: encoded_output,
+                isBase64Encoded: true,
+                headers: {
+                    "content-encoding": "identity",
+                    ...response_headers,
+                    ...headers
+                }
+            };
         } else {
             console.log("Bypassing... Size: ", originSize);
-            res.status(200).send(body);
+            return {
+                statusCode: 200,
+                body: body.toString('base64'),
+                isBase64Encoded: true,
+                headers: {
+                    "content-encoding": "identity",
+                    ...response_headers,
+                }
+            };
         }
     } catch (err) {
         console.error(err);
-        res.status(500).send(err.message || "");
+        return {
+            statusCode: 500,
+            body: err.message || ""
+        };
     }
 };
-
-// Export the proxy handler function
-module.exports = proxyHandler;
