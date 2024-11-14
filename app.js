@@ -4,7 +4,7 @@ const express = require('express');
 const app = express();
 
 const proxy = require('./functions/index.js'); // Import the proxy handler from index.js
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 app.enable('trust proxy');  // Enable trust proxy if behind a proxy
 
